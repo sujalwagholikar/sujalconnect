@@ -285,6 +285,19 @@ class MusicEngine:
     # for which clients are currently broken and reorder/adjust this list;
     # also make sure `yt-dlp` itself is kept at a recent version in
     # requirements.txt, since fixes ship as ordinary yt-dlp releases.
+    # PROXY (recommended once you have one -- see README "Fixing YouTube
+    # 403s on Vercel" section): Vercel's outbound IPs are shared,
+    # datacenter IPs, which YouTube blocks/rate-limits far more
+    # aggressively than ordinary home internet connections -- this is very
+    # often the actual cause when every player_client above still fails
+    # with a fast (~1s) 403/404, even though the same code works fine from
+    # a laptop. Setting YTDLP_PROXY routes yt-dlp's requests through a
+    # residential proxy so YouTube sees a home-like IP instead. Format:
+    #   http://username:password@proxy-host:port
+    # Leave unset to make no proxy calls at all (default -- zero behavior
+    # change if you don't configure one).
+    PROXY_URL = os.environ.get("YTDLP_PROXY", "").strip() or None
+
     _BASE_OPTS = {
         "quiet": True,
         "no_warnings": True,
@@ -330,6 +343,8 @@ class MusicEngine:
             )
         },
     }
+    if PROXY_URL:
+        _BASE_OPTS["proxy"] = PROXY_URL
 
     def __init__(self):
         self._lock = threading.RLock()
@@ -1106,6 +1121,11 @@ class MusicEngine:
                 "cached_songs": len(self._song_cache),
                 "cached_searches": len(self._search_cache),
                 "cached_albums": len(self._album_cache),
+                # Surfaced here (rather than only in logs) so it's easy to
+                # confirm from a browser hitting /api/health whether a
+                # YTDLP_PROXY env var actually took effect after a deploy --
+                # never the proxy value itself, just whether one is set.
+                "proxy_configured": bool(self.PROXY_URL),
             }
 
 
