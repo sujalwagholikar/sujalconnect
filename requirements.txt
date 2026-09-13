@@ -1,6 +1,11 @@
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
-yt-dlp>=2024.5.0
+# Pinned to a recent floor, not a ceiling: YouTube changes what breaks
+# yt-dlp on a near-weekly basis, and fixes ship as ordinary yt-dlp
+# releases. If playback failures spike, the FIRST thing to try is
+# bumping this floor (Vercel reinstalls from this file on every deploy,
+# so redeploying after bumping this is enough -- no other changes needed).
+yt-dlp>=2026.08.19
 requests>=2.31.0
 pydantic>=2.6.0
 python-multipart>=0.0.9

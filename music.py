@@ -266,6 +266,25 @@ class MusicEngine:
     """
 
     # Common yt-dlp options shared across all extractions.
+    #
+    # CLIENT SELECTION CAVEAT (read before "fixing" this again):
+    # YouTube does not publish a stable API for third-party extractors --
+    # yt-dlp reverse-engineers its internal player clients (android, ios,
+    # web, tv, etc), and YouTube periodically breaks individual clients or
+    # starts demanding a "PO Token" (proof-of-origin token) from them,
+    # which yt-dlp cannot generate without a real browser. This is an
+    # actively moving target upstream (see yt-dlp's own GitHub issues --
+    # new client breakages get reported weekly), and it's WORSE from cloud
+    # hosts like Vercel/AWS/GCP specifically because YouTube trusts
+    # datacenter IP ranges less than home broadband IPs.
+    #
+    # There is no permanent fix for this from our side -- only mitigation:
+    # list several clients so that if YouTube blocks one this week,
+    # extraction falls through to the next before giving up. If playback
+    # failures spike again later, check https://github.com/yt-dlp/yt-dlp/issues
+    # for which clients are currently broken and reorder/adjust this list;
+    # also make sure `yt-dlp` itself is kept at a recent version in
+    # requirements.txt, since fixes ship as ordinary yt-dlp releases.
     _BASE_OPTS = {
         "quiet": True,
         "no_warnings": True,
@@ -274,22 +293,34 @@ class MusicEngine:
         "extract_flat": False,
         "geo_bypass": True,
         "nocheckcertificate": True,
-        "socket_timeout": 15,
+        "socket_timeout": 20,
+        "retries": 3,
+        "fragment_retries": 3,
         "source_address": "0.0.0.0",
         # Prefer m4a (AAC) since it's broadly seekable/streamable in <audio>
         # tags across browsers without extra transcoding, while still HQ.
+        # The extra fallback tiers matter more now: some player clients
+        # only return a reduced format list (e.g. just format 18, 360p),
+        # so we accept progressively looser formats rather than failing
+        # outright when the ideal m4a isn't available from whichever
+        # client actually answered.
         "format": (
             "bestaudio[ext=m4a][abr<=256]/"
             "bestaudio[ext=m4a]/"
             "bestaudio[acodec^=mp4a]/"
-            "bestaudio/best"
+            "bestaudio/"
+            "best[acodec!=none]/"
+            "best"
         ),
         "extractor_args": {
             "youtube": {
-                # 'android'/'ios' clients are far less likely to be throttled
-                # or blocked than 'web', and usually return direct googlevideo
-                # URLs that work great in an HTML5 <audio> element.
-                "player_client": ["android", "web"],
+                # Ordered fallback chain, not just a single pinned pair.
+                # yt-dlp tries each in order and moves on if one is
+                # UNPLAYABLE / 403s / needs a PO token it doesn't have.
+                # "tv" and "tv_simply" are currently among the more
+                # reliable no-PO-token-required clients; "web" is kept
+                # last as the most universally available baseline.
+                "player_client": ["tv", "tv_simply", "ios", "android", "web"],
             }
         },
         "http_headers": {
